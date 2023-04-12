@@ -8,7 +8,7 @@ from random import randint
 debug_level = False
 
 
-def print_time_stamp():
+def time_stamp():
     now = datetime.now()
     return now.strftime("%H:%M:%S")
 
@@ -33,7 +33,7 @@ def check_wifi(ssid: str) -> bool:
     if ssid in wifi_response:
         min_rate = 7
         while not get_tx_rate() > min_rate:
-            print(print_time_stamp(), "[check_wifi] lastTxRate <= {int}. Check again in 5s...".format(int=min_rate))
+            print(time_stamp(), "[check_wifi] lastTxRate <= {int}. Check again in 5s...".format(int=min_rate))
             sleep(5)
         return True
     else:
@@ -42,12 +42,12 @@ def check_wifi(ssid: str) -> bool:
 
 def connect_wifi(ssid: str) -> bool:
     for attempt in range(1, 99):
-        print(print_time_stamp(), "[connect_wifi] Attempt {number} to connect to {ssid}".format(
+        print(time_stamp(), "[connect_wifi] Attempt {number} to connect to {ssid}".format(
             number=attempt,
             ssid=ssid))
         networksetup("-setairportnetwork", "en0", ssid)
         if check_wifi(ssid):
-            print(print_time_stamp(), "[connect_wifi] Connected to", ssid)
+            print(time_stamp(), "[connect_wifi] Connected to", ssid)
             sleep(5)
             return True
         sleep(10)
@@ -55,11 +55,10 @@ def connect_wifi(ssid: str) -> bool:
 
 
 def spoof_mac():
-
     # get current MAC address
     # ifconfig en0 | grep ether
     cur = get_mac_address()
-    print(print_time_stamp(), "[spoof_mac] Current MAC Address: ", cur)
+    print(time_stamp(), "[spoof_mac] Current MAC Address: ", cur)
 
     # generate a new random MAC address (note: may not be compliant)
     gen = generate_mac_address()
@@ -75,7 +74,7 @@ def spoof_mac():
 
     # check it updated
     check = get_mac_address()
-    print(print_time_stamp(), "[spoof_mac] New MAC Address:     ", check)
+    print(time_stamp(), "[spoof_mac] New MAC Address:     ", check)
 
 
 def get_remaining(logged_in_soup) -> (float, str):
@@ -91,7 +90,7 @@ def kill_cna():
     from sh import pkill
     try:
         result = pkill("-l", "-f", "Captive Network Assistant")
-        print(print_time_stamp(), "[kill_cna] Killed CNA.", result)
+        print(time_stamp(), "[kill_cna] Killed CNA.", result)
         sleep(1)
     except:
         # do nothing
@@ -104,16 +103,17 @@ def try_connect_to(host):
     # could use ping instead?
     zero_if_connected = 1
     while zero_if_connected > 0:
-        if debug_level: print(print_time_stamp(), "[try_connect_to] trying", host, "attempt:", zero_if_connected)
+        if debug_level: print(time_stamp(), "[try_connect_to] trying", host, "attempt:", zero_if_connected)
         kill_cna()
         try:
             request = requests.get(host)
             if request.status_code == 200:
-                if debug_level: print(print_time_stamp(), "[try_connect_to]", request.status_code, request.reason, request.request.url)
+                if debug_level: print(time_stamp(), "[try_connect_to]", request.status_code, request.reason,
+                                      request.request.url)
                 zero_if_connected = 0
                 return request
         except:
-            print(print_time_stamp(), "[try_connect_to] connection to", host, "failed.")
+            print(time_stamp(), "[try_connect_to] connection to", host, "failed.")
         sleep(5)
 
 
@@ -127,7 +127,7 @@ def get_tx_rate() -> int:
         split = line.strip().split(":")
         results_dict[split[0].strip()] = split[1].strip()
     last_tx_rate = int(results_dict["lastTxRate"])
-    if debug_level: print(print_time_stamp(), "[get_tx_rate] lastTxRate: ", last_tx_rate)
+    if debug_level: print(time_stamp(), "[get_tx_rate] lastTxRate: ", last_tx_rate)
     return last_tx_rate
 
 
@@ -157,14 +157,14 @@ for i in range(1, 1440):
             remaining_value, remaining_unit = get_remaining(u_soup)
             if remaining_value < 25:
                 # not much though, so spoof a new mac and reconnect
-                print(print_time_stamp(), "[Logged in] There's only {value} {units} left.".format(
+                print(time_stamp(), "[Logged in] There's only {value} {units} left.".format(
                     value=remaining_value,
                     units=remaining_unit))
                 spoof_mac()
                 sleep(5)
             else:
                 # enough data left, so just sleep for 60 seconds
-                print(print_time_stamp(), "[Logged in] There's {value} {units} left.".format(
+                print(time_stamp(), "[Logged in] There's {value} {units} left.".format(
                     value=remaining_value,
                     units=remaining_unit))
                 sleep(60)
@@ -176,7 +176,7 @@ for i in range(1, 1440):
         s = try_connect_to(actual_url)
 
         if 'Login failed : Sorry, but you are out of data!' in s.text:
-            print(print_time_stamp(), "[Logged in] Out of data, spoof the mac...")
+            print(time_stamp(), "[Logged in] Out of data, spoof the mac...")
             spoof_mac()
         else:
             # must be a new mac, so complete the login process
