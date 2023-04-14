@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from time import sleep
 from datetime import datetime
-from sh import sudo, grep, ifconfig, networksetup
+from sh import sudo, grep, ifconfig, networksetup, pkill, airport
 from random import randint
 
 debug_level = False
@@ -87,7 +87,6 @@ def get_remaining(logged_in_soup) -> (float, str):
 
 def kill_cna():
     # if the Apple Captive Network Assistant is running, kill it
-    from sh import pkill
     try:
         result = pkill("-l", "-f", "Captive Network Assistant")
         print(time_stamp(), "[kill_cna] Killed CNA.", result)
@@ -120,7 +119,6 @@ def try_connect_to(host):
 def get_tx_rate() -> int:
     # Check what rate the Wi-Fi is connected at, <=7 seems to cause issues.
     # alternatively use ping latency?
-    from sh import airport
     result = airport("-I")
     results_dict = {}
     for line in result:
