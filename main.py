@@ -18,9 +18,12 @@ def console_log(colour, scope, message):
     if debug_level is False and colour == "debug":
         return
 
+    # print the timestamp and then the scope, in default colour
     print(default, end="")
     print(time_stamp(), end="")
+    print(" [", scope, "] ", sep="", end="")
 
+    # set the text colour depending on the 'colour' param
     if colour == "warning":
         print(dark_red, end="")
     elif colour == "debug":
@@ -28,8 +31,7 @@ def console_log(colour, scope, message):
     elif colour == "success":
         print(dark_green, end="")
 
-    print(" [", scope, "] ", sep="", end="")
-
+    # print the message then reset the colour after
     print(message, end="")
     print(default)
 
