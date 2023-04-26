@@ -9,6 +9,9 @@ debug_level = False
 
 
 def console_log(colour, scope, message):
+    # Capitalise the first letter of the message
+    message_cap = message[0].upper() + message[1:]
+
     # ANSI escape sequences for text colours
     # print("\033[31;1;4mHello\033[0m")
     dark_red = '\033[31m'
@@ -34,7 +37,7 @@ def console_log(colour, scope, message):
         print(dark_green, end="")
 
     # print the message then reset the colour after
-    print(message, end="")
+    print(message_cap, end="")
     print(default)
 
 
