@@ -10,19 +10,21 @@ debug_level = False
 
 def console_log(colour, scope, message):
     # ANSI escape sequences for text colours
-    dark_red = '\u001B[31m'
-    dark_green = '\u001B[32m'
-    dark_yellow = '\u001B[33m'
-    default = '\u001B[0m'
+    # print("\033[31;1;4mHello\033[0m")
+    dark_red = '\033[31m'
+    dark_green = '\033[32m'
+    dark_yellow = '\033[33m'
+    grey = '\033[37;2m'
+    default = '\033[0m'
 
     if debug_level is False and colour == "debug":
         return
 
     # print the timestamp and then the scope, in default colour
-    print(default, end="")
+    print(grey, end="")
     print(time_stamp(), end="")
     print(" [", scope, "] ", sep="", end="")
-
+    print(default, end="")
     # set the text colour depending on the 'colour' param
     if colour == "warning":
         print(dark_red, end="")
