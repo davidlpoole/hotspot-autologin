@@ -5,12 +5,18 @@ from datetime import datetime
 from sh import sudo, grep, ifconfig, networksetup, pkill, airport
 from random import randint
 
-debug_level = False
+
+def log_via_api(scope, message):
+    # r = requests.post(url, data={'key': 'value'}
+    url = "http://127.0.0.1:8000/api/logs/"
+    requests.post(url, data={'scope': scope, 'message': message})
 
 
 def console_log(colour, scope, message):
     # Capitalise the first letter of the message
     message_cap = message[0].upper() + message[1:]
+
+    log_via_api(scope, message_cap)
 
     # ANSI escape sequences for text colours
     # print("\033[31;1;4mHello\033[0m")
