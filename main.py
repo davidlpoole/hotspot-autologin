@@ -85,7 +85,7 @@ def check_wifi(ssid: str) -> bool:
 
 def connect_wifi(ssid: str) -> bool:
     for attempt in range(1, 99):
-        console_log("debug",
+        console_log("notify",
                     "connect_wifi",
                     "Attempt {number} to connect to {ssid}".format(
                         number=attempt,
@@ -143,13 +143,14 @@ def kill_cna():
 
 
 def try_connect_to(host: str):
-    # Keep trying until Google is reached or redirected to hotspot
+    # Keep trying until host is reached or redirected to hotspot
     # could use ping instead?
     zero_if_connected = 1
     while zero_if_connected > 0:
-        console_log("debug", "try_connect_to", "trying " + host + " attempt: " + str(zero_if_connected))
+        console_log("debug", "try_connect_to", "attempt " + str(zero_if_connected) + ", trying: " + host)
         kill_cna()
         try:
+            zero_if_connected += 1
             request = requests.get(host)
             if request.status_code == 200:
                 console_log("debug",
