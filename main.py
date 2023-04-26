@@ -61,17 +61,26 @@ def generate_mac_address() -> str:
 
 
 def check_wifi(ssid: str) -> bool:
+    # ensure connection to correct Wi-Fi network
+    # then check the tx_rate is good enough
     wifi_response = networksetup("-getairportnetwork", "en0")
-    if ssid in wifi_response:
+    console_log("debug", "check_wifi", str(wifi_response).strip())
+    if ssid not in wifi_response:
+        return False
+    else:
         min_rate = 7
-        while not get_tx_rate() > min_rate:
+        if get_tx_rate() > min_rate:
+            return True
+        else:
             console_log("warning",
                         "check_wifi",
-                        "lastTxRate <= {int}. Check again in 5s...".format(int=min_rate))
-            sleep(5)
-        return True
-    else:
-        return False
+                        "lastTxRate <= {int}...".format(int=min_rate))
+            while not get_tx_rate() > min_rate:
+                sleep(5)
+            console_log("notify",
+                        "check_wifi",
+                        "lastTxRate: {int}...".format(int=get_tx_rate()))
+            return True
 
 
 def connect_wifi(ssid: str) -> bool:
@@ -162,7 +171,7 @@ def get_tx_rate() -> int:
         split = line.strip().split(":")
         results_dict[split[0].strip()] = split[1].strip()
     last_tx_rate = int(results_dict["lastTxRate"])
-    console_log("debug", "get_tx_rate", "lastTxRate: " + str(last_tx_rate))
+    # console_log("debug", "get_tx_rate", "lastTxRate: " + str(last_tx_rate))
     return last_tx_rate
 
 
