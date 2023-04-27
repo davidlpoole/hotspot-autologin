@@ -1,15 +1,21 @@
+from datetime import datetime
+from random import randint
+from time import sleep
+
 import requests
 from bs4 import BeautifulSoup
-from time import sleep
-from datetime import datetime
 from sh import sudo, grep, ifconfig, networksetup, pkill, airport
-from random import randint
+
+debug_level = True
 
 
 def log_via_api(scope, message):
     # r = requests.post(url, data={'key': 'value'}
     url = "http://127.0.0.1:8000/api/logs/"
-    requests.post(url, data={'scope': scope, 'message': message})
+    try:
+        requests.post(url, data={'scope': scope, 'message': message})
+    except:
+        return 1  # TODO: implement error handling, e.g. API server is down
 
 
 def console_log(colour, scope, message):
