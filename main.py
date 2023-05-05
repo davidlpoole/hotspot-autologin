@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from datetime import datetime
 from random import randint
 from time import sleep
@@ -77,7 +79,12 @@ def check_wifi(ssid: str) -> bool:
     # then check the tx_rate is good enough
     wifi_response = networksetup("-getairportnetwork", "en0")
     console_log("debug", "check_wifi", str(wifi_response).strip())
-    if ssid not in wifi_response:
+    if "You are not associated with an AirPort network." in wifi_response:
+        networksetup("zsetnetworkserviceenabled", "Wi-Fi", "On")
+        console_log("notify",
+                    "check_wifi",
+                    "Turning on Wi-Fi...")
+    elif ssid not in wifi_response:
         return False
     else:
         min_rate = 7
@@ -188,58 +195,59 @@ def get_tx_rate() -> int:
     return last_tx_rate
 
 
-for i in range(1, 1440):
-    # ensure connection to the wifi hotspot
-    hotspot_name = "NET4"
-    while not check_wifi(hotspot_name):
-        connect_wifi(hotspot_name)
+if __name__ == "__main__":
+    for i in range(1, 1440):
+        # ensure connection to the wifi hotspot
+        hotspot_name = "NET4"
+        while not check_wifi(hotspot_name):
+            connect_wifi(hotspot_name)
 
-    # try to connect to google.com
-    test_url = "http://www.google.com/"
+        # try to connect to google.com
+        test_url = "http://www.google.com/"
 
-    r = try_connect_to(test_url)
+        r = try_connect_to(test_url)
 
-    # compare the test_url against where it actually went
-    actual_url = r.request.url
-    if actual_url == test_url:
-        # connection to google.com was successful
-        # so try the hotspot url to login/check remaining data
-        u = try_connect_to("http://192.168.182.1:3990/prelogin")
+        # compare the test_url against where it actually went
+        actual_url = r.request.url
+        if actual_url == test_url:
+            # connection to google.com was successful
+            # so try the hotspot url to login/check remaining data
+            u = try_connect_to("http://192.168.182.1:3990/prelogin")
 
-        u_soup = BeautifulSoup(u.content, "html.parser")
-        title = u_soup.findAll("title")[0].text
+            u_soup = BeautifulSoup(u.content, "html.parser")
+            title = u_soup.findAll("title")[0].text
 
-        if title == "Logged in":
-            # already logged in and there must be > 0 data left
-            remaining_value, remaining_unit = get_remaining(u_soup)
-            if remaining_value < 25:
-                # not much though, so spoof a new mac and reconnect
-                console_log("notify", "Logged in", "There's only {value} {units} left.".format(
-                    value=remaining_value,
-                    units=remaining_unit))
-                spoof_mac()
-                sleep(5)
-            else:
-                # enough data left, so just sleep for 60 seconds
-                console_log("notify", "Logged in", "There's {value} {units} left.".format(
-                    value=remaining_value,
-                    units=remaining_unit))
-                sleep(60)
-    else:
-        # not logged in yet, or maybe ran out of data
-        # so try logging in
-        actual_url = actual_url + '&passcode=robriv'
-        # print(actual_url)
-        s = try_connect_to(actual_url)
-
-        if 'Login failed : Sorry, but you are out of data!' in s.text:
-            console_log("notify", "Logged in", "Sorry, but you are out of data! Spoofing the mac...")
-            spoof_mac()
+            if title == "Logged in":
+                # already logged in and there must be > 0 data left
+                remaining_value, remaining_unit = get_remaining(u_soup)
+                if remaining_value < 25:
+                    # not much though, so spoof a new mac and reconnect
+                    console_log("notify", "Logged in", "There's only {value} {units} left.".format(
+                        value=remaining_value,
+                        units=remaining_unit))
+                    spoof_mac()
+                    sleep(5)
+                else:
+                    # enough data left, so just sleep for 60 seconds
+                    console_log("notify", "Logged in", "There's {value} {units} left.".format(
+                        value=remaining_value,
+                        units=remaining_unit))
+                    sleep(60)
         else:
-            # must be a new mac, so complete the login process
-            s_soup = BeautifulSoup(s.content, "html.parser")
-            redirect_url = s_soup.findAll("meta")
+            # not logged in yet, or maybe ran out of data
+            # so try logging in
+            actual_url = actual_url + '&passcode=robriv'
+            # print(actual_url)
+            s = try_connect_to(actual_url)
 
-            for each in redirect_url:
-                login_url = each["content"].split("0;url=")[1]
-            t = try_connect_to(login_url)
+            if 'Login failed : Sorry, but you are out of data!' in s.text:
+                console_log("notify", "Logged in", "Sorry, but you are out of data! Spoofing the mac...")
+                spoof_mac()
+            else:
+                # must be a new mac, so complete the login process
+                s_soup = BeautifulSoup(s.content, "html.parser")
+                redirect_url = s_soup.findAll("meta")
+
+                for each in redirect_url:
+                    login_url = each["content"].split("0;url=")[1]
+                t = try_connect_to(login_url)
