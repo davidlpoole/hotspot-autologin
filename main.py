@@ -182,9 +182,12 @@ def get_tx_rate() -> int:
     # alternatively use ping latency?
     result = airport("-I")
     results_dict = {}
-    for line in result:
+    for line in result.strip().split("\n"):
         split = line.strip().split(":")
-        results_dict[split[0].strip()] = split[1].strip()
+        try:
+            results_dict[split[0].strip()] = split[1].strip()
+        except:
+            pass
     last_tx_rate = int(results_dict["lastTxRate"])
     # console_log("debug", "get_tx_rate", "lastTxRate: " + str(last_tx_rate))
     return last_tx_rate
