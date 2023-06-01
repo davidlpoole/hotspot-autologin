@@ -9,15 +9,17 @@ from bs4 import BeautifulSoup
 from sh import sudo, grep, ifconfig, networksetup, pkill, airport
 
 debug_level = True
+use_api_logger = False
 
 
 def log_via_api(scope, message):
     # r = requests.post(url, data={'key': 'value'}
     url = "http://127.0.0.1:8000/api/logs/"
-    try:
-        requests.post(url, data={'scope': scope, 'message': message})
-    except:
-        return 1  # TODO: implement error handling, e.g. API server is down
+    if use_api_logger:
+        try:
+            requests.post(url, data={'scope': scope, 'message': message})
+        except:
+            return 1  # TODO: implement error handling, e.g. API server is down
 
 
 def console_log(colour, scope, message):
