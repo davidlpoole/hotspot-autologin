@@ -63,8 +63,10 @@ def time_stamp():
 
 
 def get_mac_address() -> str:
-    cur = grep(ifconfig("en0"), "ether").strip()
-    return cur
+    cur = ifconfig("en0")
+    for line in str(cur).split("\n"):
+        if "ether" in line:
+            return line.strip()
 
 
 def generate_mac_address() -> str:
