@@ -8,7 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 from sh import sudo, grep, ifconfig, networksetup, pkill, airport
 
-debug_level = True
+debug_level = False
 use_api_logger = False
 
 
@@ -59,7 +59,9 @@ def console_log(colour, scope, message):
 
 def time_stamp():
     now = datetime.now()
-    return now.strftime("%H:%M:%S")
+    # result = now.strftime("%H:%M:%S")
+    result = now.strftime("%H:%M")
+    return result
 
 
 def get_mac_address() -> str:
@@ -148,6 +150,18 @@ def get_remaining(logged_in_soup) -> (float, str):
     return value, unit
 
 
+def data_bar(
+        remaining_data_value: float,
+        max_data: float = 600.00
+):
+    progress_bar_width = 40
+    progress_bar_bit_count = max_data / progress_bar_width
+    rem_bits = remaining_data_value / progress_bar_bit_count
+    bar = int(rem_bits) * "#" + int(progress_bar_width - rem_bits) * "_"
+    result = f'\033c{time_stamp()} |{bar}| {remaining_data_value:.0f}/{max_data:.0f} MB ({remaining_data_value/max_data*100:.0f} %)'
+    print(result)
+
+
 def kill_cna():
     # if the Apple Captive Network Assistant is running, kill it
     try:
@@ -231,9 +245,10 @@ if __name__ == '__main__':
                     sleep(5)
                 else:
                     # enough data left, so just sleep for 60 seconds
-                    console_log("notify", "Logged in", "There's {value} {units} left.".format(
-                        value=remaining_value,
-                        units=remaining_unit))
+                    # console_log("notify", "Logged in", "There's {value} {units} left.".format(
+                    #     value=remaining_value,
+                    #     units=remaining_unit))
+                    data_bar(remaining_data_value=remaining_value)
                     sleep(60)
         else:
             # not logged in yet, or maybe ran out of data
