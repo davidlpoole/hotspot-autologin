@@ -21,15 +21,19 @@ class Hotspot:
         self.terminal_height = self.get_terminal_height()
 
     def __call__(self, refresh_seconds=5, *args, **kwargs):
+        # Check/connect to the hotspot
         if self.check_wifi_power() and \
                 self.check_connected_to_hotspot() and \
                 self.get_tx_rate() > 7:
 
+            # check can connect externally
             test_url = "http://www.google.com/"
             r = self.try_connect_to(test_url)
             if r.request.url == test_url:
+                # reached external, so currently logged in to hotspot with data
                 self.try_prelogin()
             else:
+                # external unreachable, so r.request.url will be a login url
                 self.try_login(r.request.url)
             self.update_task_status("Waiting...")
             sleep(refresh_seconds)
@@ -66,7 +70,7 @@ class Hotspot:
         print(f'MAC Address: {self.mac_address}')
         for idx, (time, item) in enumerate(self.task_status):
             if idx == 0:
-                print(default, end="")
+                print(default, end="")   # Latest message is white text, older messages are grey
             else:
                 print(grey, end="")
             print(f'[{time}] {item}')
@@ -81,8 +85,6 @@ class Hotspot:
             self.connected_to_hotspot = False
             self.update_task_status("Turning on Wi-Fi...")
             networksetup("-setairportpower", "en0", "on")
-        else:
-            return response
         self.display()
         return self.wifi_enabled
 
@@ -102,33 +104,32 @@ class Hotspot:
 
     def get_tx_rate(self) -> int:
         result = airport("-I")
-        results_dict = {"lastTxRate": "N/A"}
+        results_dict = {"lastTxRate": 0}
         for line in result.strip().split("\n"):
             split = line.strip().split(":")
             try:
                 results_dict[split[0].strip()] = split[1].strip()
             except:
-                pass
+                pass  # ignore exceptions
         self.tx_rate = int(results_dict["lastTxRate"])
         self.display()
         return self.tx_rate
 
     def try_connect_to(self, host: str):
-        # Keep trying until host is reached or redirected to hotspot
-        # could use ping instead?
+        # Keep trying to connect until host is reached
         zero_if_connected = 1
         while zero_if_connected > 0:
             self.update_task_status(f"Connecting to {host}, attempt {zero_if_connected}")
-            self.kill_cna()
+            self.kill_cna()  # Stop Apple's Captive Network Assistant from interrupting
             try:
                 zero_if_connected += 1
                 request = requests.get(host)
-                if request.status_code == 200:
+                if request.status_code == 200:  # Connection successful
                     zero_if_connected = 0
                     self.update_task_status(f"Connected to {host}.")
                     return request
             except:
-                pass
+                pass  # ignore exceptions and try again
             sleep(5)
 
     def try_prelogin(self):
@@ -140,31 +141,38 @@ class Hotspot:
             remaining_value, remaining_unit = self.get_remaining(soup)
             self.remaining_data = remaining_value
             if remaining_value < 25:
+                # If data is low, spoof the mac to get more data
                 self.spoof_mac()
 
     def try_login(self, actual_url):
+        # append the access code to the provided login url then submit
         actual_url += '&passcode=robriv'
         r = self.try_connect_to(actual_url)
         if 'Login failed : Sorry, but you are out of data!' in r.text:
+            # get more data by spoofing the mac and re-connecting
             self.spoof_mac()
         else:
-            # complete the login process
+            # not previously logged in with this mac address, so log in
             self.update_task_status(f"Logging in...")
             soup = BeautifulSoup(r.content, "html.parser")
             redirect_url = soup.findAll("meta")
             login_url = ""
+            # get the server generated login url with challenge code, etc.
             for each in redirect_url:
                 login_url = each["content"].split("0;url=")[1]
             self.try_connect_to(login_url)
 
     def get_mac_address(self) -> str:
         cur = ifconfig("en0")
+        # command returns multiple lines, so iterate over to find the mac addr
         for line in str(cur).split("\n"):
             if "ether" in line:
+                # remove the text "ether " from the start of the string
                 return line.strip().split(" ")[1]
 
     def generate_mac_address(self) -> str:
         self.update_task_status("Generating a new MAC Address...")
+        # probably non-compliant but it works
         mac = [0x60, 0xf8, 0x1d,
                randint(0x00, 0x7f),
                randint(0x00, 0x7f),
@@ -196,6 +204,7 @@ class Hotspot:
 
     def get_remaining(self, logged_in_soup) -> (float, str):
         self.update_task_status(f"Checking remaining data...")
+        # scrape the hotspot login page for the remaining data text
         results = logged_in_soup.find_all("td", class_="aleft")
         remaining_data_text = results[1].text.strip()
         value = float(remaining_data_text.split(' ')[0])
@@ -206,6 +215,7 @@ class Hotspot:
                  remaining_data_value: float,
                  max_data: float = 600.00
                  ):
+        # create an ascii progress bar of arbitrary width and segments
         progress_bar_width = 35
         progress_bar_bit_count = max_data / progress_bar_width
         rem_bits = remaining_data_value / progress_bar_bit_count
