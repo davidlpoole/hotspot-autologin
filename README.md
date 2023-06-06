@@ -1,6 +1,8 @@
 # hotspot-autologin
 In brief: Spoof the device mac address and auto login to wifi hotspot until allowance runs out then repeat.
 
+[![Screen-Shot-2023-06-06-at-4-41-41-PM.png](https://i.postimg.cc/Gt6tGNxJ/Screen-Shot-2023-06-06-at-4-41-41-PM.png)](https://postimg.cc/T5qTXtSp)
+
 I wrote this while staying at a holiday park that provided a free wifi hotspot but which was was limited to 600 MB per device per day.
 
 Given that the hotspot passcode was the same for every user, I discovered that the hotspot was using the MAC address to differentiate between devices, I also knew that it's possible to spoof the mac address (i.e. generate a new address). This meant that if I spoofed the MAC address and re-connected, the hotspot thinks it's a new device, and issues a new IP and 600 MB allowance.
