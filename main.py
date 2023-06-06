@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import os
 from datetime import datetime
 from random import randint
 from time import sleep
@@ -8,263 +8,224 @@ import requests
 from bs4 import BeautifulSoup
 from sh import sudo, grep, ifconfig, networksetup, pkill, airport
 
-debug_level = False
-use_api_logger = False
 
+class Hotspot:
+    def __init__(self, hotspot_ssid: str):
+        self.wifi_enabled = False
+        self.connected_to_hotspot = False
+        self.hotspot_ssid = hotspot_ssid
+        self.tx_rate = 0
+        self.remaining_data = 0
+        self.mac_address = self.get_mac_address()
+        self.task_status = [(self.time_stamp(), "Initialised")]
+        self.terminal_height = self.get_terminal_height()
 
-def log_via_api(scope, message):
-    # r = requests.post(url, data={'key': 'value'}
-    url = "http://127.0.0.1:8000/api/logs/"
-    if use_api_logger:
-        try:
-            requests.post(url, data={'scope': scope, 'message': message})
-        except:
-            return 1  # TODO: implement error handling, e.g. API server is down
+    def __call__(self, refresh_seconds=5, *args, **kwargs):
+        if self.check_wifi_power() and \
+                self.check_connected_to_hotspot() and \
+                self.get_tx_rate() > 7:
 
-
-def console_log(colour, scope, message):
-    # Capitalise the first letter of the message
-    message_cap = message[0].upper() + message[1:]
-
-    log_via_api(scope, message_cap)
-
-    # ANSI escape sequences for text colours
-    # print("\033[31;1;4mHello\033[0m")
-    dark_red = '\033[31m'
-    dark_green = '\033[32m'
-    dark_yellow = '\033[33m'
-    grey = '\033[37;2m'
-    default = '\033[0m'
-
-    if debug_level is False and colour == "debug":
-        return
-
-    # print the timestamp and then the scope, in default colour
-    print(grey, end="")
-    print(time_stamp(), end="")
-    print(" [", scope, "] ", sep="", end="")
-    print(default, end="")
-    # set the text colour depending on the 'colour' param
-    if colour == "warning":
-        print(dark_red, end="")
-    elif colour == "debug":
-        print(dark_yellow, end="")
-    elif colour == "success":
-        print(dark_green, end="")
-
-    # print the message then reset the colour after
-    print(message_cap, end="")
-    print(default)
-
-
-def time_stamp():
-    now = datetime.now()
-    # result = now.strftime("%H:%M:%S")
-    result = now.strftime("%H:%M")
-    return result
-
-
-def get_mac_address() -> str:
-    cur = ifconfig("en0")
-    for line in str(cur).split("\n"):
-        if "ether" in line:
-            return line.strip()
-
-
-def generate_mac_address() -> str:
-    mac = [0x60, 0xf8, 0x1d,
-           randint(0x00, 0x7f),
-           randint(0x00, 0x7f),
-           randint(0x00, 0x7f)]
-    gen = ':'.join(map(lambda x: "%02x" % x, mac))
-    return gen
-
-
-def check_wifi(ssid: str) -> bool:
-    # ensure connection to correct Wi-Fi network
-    # then check the tx_rate is good enough
-    wifi_response = networksetup("-getairportnetwork", "en0")
-    console_log("debug", "check_wifi", str(wifi_response).strip())
-    if ssid not in wifi_response:
-        return False
-    else:
-        min_rate = 7
-        if get_tx_rate() > min_rate:
-            return True
+            test_url = "http://www.google.com/"
+            r = self.try_connect_to(test_url)
+            if r.request.url == test_url:
+                self.try_prelogin()
+            else:
+                self.try_login(r.request.url)
+            self.update_task_status("Waiting...")
+            sleep(refresh_seconds)
         else:
-            console_log("warning",
-                        "check_wifi",
-                        "lastTxRate <= {int}...".format(int=min_rate))
-            while not get_tx_rate() > min_rate:
-                sleep(5)
-            console_log("notify",
-                        "check_wifi",
-                        "lastTxRate: {int}...".format(int=get_tx_rate()))
-            return True
-
-
-def connect_wifi(ssid: str) -> bool:
-    for attempt in range(1, 99):
-        console_log("notify",
-                    "connect_wifi",
-                    "Attempt {number} to connect to {ssid}".format(
-                        number=attempt,
-                        ssid=ssid))
-        networksetup("-setairportnetwork", "en0", ssid)
-        if check_wifi(ssid):
-            console_log("success", "connect_wifi", "Connected to " + ssid)
             sleep(5)
-            return True
-        sleep(10)
-    return False
 
-
-def spoof_mac():
-    # get current MAC address
-    # ifconfig en0 | grep ether
-    cur = get_mac_address()
-    console_log("notify", "spoof_mac", "Current MAC Address: " + cur)
-
-    # generate a new random MAC address (note: may not be compliant)
-    gen = generate_mac_address()
-
-    # disconnect from Wi-Fi network
-    # note: for sudo to work without password, add to /etc/sudoers
-    # sudo airport -z
-    sudo("airport", "-z")
-
-    # spoof the mac address
-    # see note re: /etc/sudoers above
-    sudo("ifconfig", "en0", "ether", gen)
-
-    # check it updated
-    check = get_mac_address()
-    console_log("success", "spoof_mac", "New MAC Address: " + check)
-
-
-def get_remaining(logged_in_soup) -> (float, str):
-    results = logged_in_soup.find_all("td", class_="aleft")
-    remaining_data_text = results[1].text.strip()
-    value = float(remaining_data_text.split(' ')[0])
-    unit = remaining_data_text.split(' ')[1]
-    return value, unit
-
-
-def data_bar(
-        remaining_data_value: float,
-        max_data: float = 600.00
-):
-    progress_bar_width = 40
-    progress_bar_bit_count = max_data / progress_bar_width
-    rem_bits = remaining_data_value / progress_bar_bit_count
-    bar = int(rem_bits) * "#" + int(progress_bar_width - rem_bits) * "_"
-    result = f'\033c{time_stamp()} |{bar}| {remaining_data_value:.0f}/{max_data:.0f} MB ({remaining_data_value/max_data*100:.0f} %)'
-    print(result)
-
-
-def kill_cna():
-    # if the Apple Captive Network Assistant is running, kill it
-    try:
-        result = pkill("-l", "-f", "Captive Network Assistant")
-        console_log("success", "kill_cna", "Killed CNA." + str(result))
-        sleep(1)
-    except:
-        # do nothing
-        # print("CNA not running.")
-        return 0
-
-
-def try_connect_to(host: str):
-    # Keep trying until host is reached or redirected to hotspot
-    # could use ping instead?
-    zero_if_connected = 1
-    while zero_if_connected > 0:
-        console_log("debug", "try_connect_to", "attempt " + str(zero_if_connected) + ", trying: " + host)
-        kill_cna()
+    def get_terminal_height(self):
         try:
-            zero_if_connected += 1
-            request = requests.get(host)
-            if request.status_code == 200:
-                console_log("debug",
-                            "try_connect_to",
-                            "connection successful")
-                zero_if_connected = 0
-                return request
+            size = os.get_terminal_size().lines
         except:
-            console_log("warning", "try_connect_to", "connection to " + host + " failed.")
-        sleep(5)
+            size = 11
+        return size
 
+    def update_task_status(self, status_text):
+        max_items = self.terminal_height - 5
+        self.task_status.insert(0,(self.time_stamp(), status_text))
+        if len(self.task_status) > max_items:
+            self.task_status = self.task_status[:max_items]
+        self.display()
 
-def get_tx_rate() -> int:
-    # Check what rate the Wi-Fi is connected at, <=7 seems to cause issues.
-    # alternatively use ping latency?
-    result = airport("-I")
-    results_dict = {}
-    for line in result.strip().split("\n"):
-        split = line.strip().split(":")
+    def display(self):
+        dark_red = '\033[31m'
+        dark_green = '\033[32m'
+        dark_yellow = '\033[33m'
+        grey = '\033[37;2m'
+        default = '\033[0m'
+        clear = '\033c'
+
+        print(clear, end='')
+        print(f'{self.data_bar(self.remaining_data)}')
+        print(f'Wi-Fi On: {self.wifi_enabled}', end='    ')
+        print(f'Connected to {self.hotspot_ssid}: {self.connected_to_hotspot}', end='    ')
+        print(f'Last Tx Rate: {self.tx_rate} Mbps')
+        print(f'MAC Address: {self.mac_address}')
+        for idx, (time, item) in enumerate(self.task_status):
+            if idx == 0:
+                print(default, end="")
+            else:
+                print(grey, end="")
+            print(f'[{time}] {item}')
+        print(default, end="")
+
+    def check_wifi_power(self):
+        response = networksetup("-getairportpower", "en0").strip()
+        if response == "Wi-Fi Power (en0): On":
+            self.wifi_enabled = True
+        elif response == "Wi-Fi Power (en0): Off":
+            self.wifi_enabled = False
+            self.connected_to_hotspot = False
+            self.update_task_status("Turning on Wi-Fi...")
+            networksetup("-setairportpower", "en0", "on")
+        else:
+            return response
+        self.display()
+        return self.wifi_enabled
+
+    def check_connected_to_hotspot(self):
+        response = networksetup("-getairportnetwork", "en0").strip()
+        if self.hotspot_ssid in response:
+            self.connected_to_hotspot = True
+        elif "You are not associated with an AirPort network." in response:
+            self.connected_to_hotspot = False
+            self.connect_wifi(self.hotspot_ssid)
+        self.display()
+        return self.connected_to_hotspot
+
+    def connect_wifi(self, ssid: str) -> bool:
+        self.update_task_status(f"Connecting to {self.hotspot_ssid}")
+        networksetup("-setairportnetwork", "en0", ssid)
+
+    def get_tx_rate(self) -> int:
+        result = airport("-I")
+        results_dict = {"lastTxRate": "N/A"}
+        for line in result.strip().split("\n"):
+            split = line.strip().split(":")
+            try:
+                results_dict[split[0].strip()] = split[1].strip()
+            except:
+                pass
+        self.tx_rate = int(results_dict["lastTxRate"])
+        self.display()
+        return self.tx_rate
+
+    def try_connect_to(self, host: str):
+        # Keep trying until host is reached or redirected to hotspot
+        # could use ping instead?
+        zero_if_connected = 1
+        while zero_if_connected > 0:
+            self.update_task_status(f"Connecting to {host}, attempt {zero_if_connected}")
+            self.kill_cna()
+            try:
+                zero_if_connected += 1
+                request = requests.get(host)
+                if request.status_code == 200:
+                    zero_if_connected = 0
+                    self.update_task_status(f"Connected to {host}.")
+                    return request
+            except:
+                pass
+            sleep(5)
+
+    def try_prelogin(self):
+        r = self.try_connect_to("http://192.168.182.1:3990/prelogin")
+        soup = BeautifulSoup(r.content, "html.parser")
+        title = soup.findAll("title")[0].text
+        if title == "Logged in":
+            # already logged in and there must be > 0 data left
+            remaining_value, remaining_unit = self.get_remaining(soup)
+            self.remaining_data = remaining_value
+            if remaining_value < 25:
+                self.spoof_mac()
+
+    def try_login(self, actual_url):
+        actual_url += '&passcode=robriv'
+        r = self.try_connect_to(actual_url)
+        if 'Login failed : Sorry, but you are out of data!' in r.text:
+            self.spoof_mac()
+        else:
+            # complete the login process
+            self.update_task_status(f"Logging in...")
+            soup = BeautifulSoup(r.content, "html.parser")
+            redirect_url = soup.findAll("meta")
+            login_url = ""
+            for each in redirect_url:
+                login_url = each["content"].split("0;url=")[1]
+            self.try_connect_to(login_url)
+
+    def get_mac_address(self) -> str:
+        cur = ifconfig("en0")
+        for line in str(cur).split("\n"):
+            if "ether" in line:
+                return line.strip().split(" ")[1]
+
+    def generate_mac_address(self) -> str:
+        self.update_task_status("Generating a new MAC Address...")
+        mac = [0x60, 0xf8, 0x1d,
+               randint(0x00, 0x7f),
+               randint(0x00, 0x7f),
+               randint(0x00, 0x7f)]
+        gen = ':'.join(map(lambda x: "%02x" % x, mac))
+        return gen
+
+    def spoof_mac(self):
+        self.update_task_status(f"Spoofing the MAC Address...")
+        self.display()
+        # generate a new random MAC address (note: may not be compliant)
+        gen = self.generate_mac_address()
+
+        # disconnect from Wi-Fi network
+        # note: for sudo to work without password, add to /etc/sudoers
+        # sudo airport -z
+        sudo("airport", "-z")
+
+        # spoof the mac address
+        # see note re: /etc/sudoers above
+        sudo("ifconfig", "en0", "ether", gen)
+
+        self.mac_address = self.get_mac_address()
+
+    def time_stamp(self):
+        now = datetime.now()
+        result = now.strftime("%H:%M:%S")
+        return result
+
+    def get_remaining(self, logged_in_soup) -> (float, str):
+        self.update_task_status(f"Checking remaining data...")
+        results = logged_in_soup.find_all("td", class_="aleft")
+        remaining_data_text = results[1].text.strip()
+        value = float(remaining_data_text.split(' ')[0])
+        unit = remaining_data_text.split(' ')[1]
+        return value, unit
+
+    def data_bar(self,
+                 remaining_data_value: float,
+                 max_data: float = 600.00
+                 ):
+        progress_bar_width = 35
+        progress_bar_bit_count = max_data / progress_bar_width
+        rem_bits = remaining_data_value / progress_bar_bit_count
+        bar = int(rem_bits) * "#" + int(progress_bar_width - rem_bits) * "_"
+        result = f'Remaining Data: |{bar}| {remaining_data_value:.0f}/{max_data:.0f} MB ({remaining_data_value / max_data * 100:.0f} %)'
+        return result
+
+    def kill_cna(self):
+        # if the Apple Captive Network Assistant is running, kill it
         try:
-            results_dict[split[0].strip()] = split[1].strip()
+            result = pkill("-l", "-f", "Captive Network Assistant")
+            sleep(1)
+            return 1
         except:
-            pass
-    last_tx_rate = int(results_dict["lastTxRate"])
-    # console_log("debug", "get_tx_rate", "lastTxRate: " + str(last_tx_rate))
-    return last_tx_rate
+            # do nothing
+            # print("CNA not running.")
+            return 0
 
 
 if __name__ == '__main__':
-    for i in range(1440):
-        # ensure connection to the wifi hotspot
-        hotspot_name = "NET4"
-        while not check_wifi(hotspot_name):
-            connect_wifi(hotspot_name)
-
-        # try to connect to google.com
-        test_url = "http://www.google.com/"
-
-        r = try_connect_to(test_url)
-
-        # compare the test_url against where it actually went
-        actual_url = r.request.url
-        if actual_url == test_url:
-            # connection to google.com was successful
-            # so try the hotspot url to login/check remaining data
-            u = try_connect_to("http://192.168.182.1:3990/prelogin")
-
-            u_soup = BeautifulSoup(u.content, "html.parser")
-            title = u_soup.findAll("title")[0].text
-
-            if title == "Logged in":
-                # already logged in and there must be > 0 data left
-                remaining_value, remaining_unit = get_remaining(u_soup)
-                if remaining_value < 25:
-                    # not much though, so spoof a new mac and reconnect
-                    console_log("notify", "Logged in", "There's only {value} {units} left.".format(
-                        value=remaining_value,
-                        units=remaining_unit))
-                    spoof_mac()
-                    sleep(5)
-                else:
-                    # enough data left, so just sleep for 60 seconds
-                    # console_log("notify", "Logged in", "There's {value} {units} left.".format(
-                    #     value=remaining_value,
-                    #     units=remaining_unit))
-                    data_bar(remaining_data_value=remaining_value)
-                    sleep(60)
-        else:
-            # not logged in yet, or maybe ran out of data
-            # so try logging in
-            actual_url = actual_url + '&passcode=robriv'
-            # print(actual_url)
-            s = try_connect_to(actual_url)
-
-            if 'Login failed : Sorry, but you are out of data!' in s.text:
-                console_log("notify", "Logged in", "Sorry, but you are out of data! Spoofing the mac...")
-                spoof_mac()
-            else:
-                # must be a new mac, so complete the login process
-                s_soup = BeautifulSoup(s.content, "html.parser")
-                redirect_url = s_soup.findAll("meta")
-
-                for each in redirect_url:
-                    login_url = each["content"].split("0;url=")[1]
-                t = try_connect_to(login_url)
+    robriv = Hotspot("NET4")
+    while True:
+        robriv(60)
