@@ -28,15 +28,16 @@ class Hotspot:
 
             # check can connect externally
             test_url = "http://www.google.com/"
+            self.update_task_status("Checking external connectivity...")
             r = self.try_connect_to(test_url)
             if r.request.url == test_url:
                 # reached external, so currently logged in to hotspot with data
                 self.try_prelogin()
+                self.update_task_status("Waiting...")
+                sleep(refresh_seconds)
             else:
                 # external unreachable, so r.request.url will be a login url
                 self.try_login(r.request.url)
-            self.update_task_status("Waiting...")
-            sleep(refresh_seconds)
         else:
             sleep(5)
 
@@ -94,13 +95,13 @@ class Hotspot:
             self.connected_to_hotspot = True
         elif "You are not associated with an AirPort network." in response:
             self.connected_to_hotspot = False
-            self.connect_wifi(self.hotspot_ssid)
-        self.display()
+            self.update_task_status(f"Connecting to {self.hotspot_ssid}")
+            self.connect_wifi()
         return self.connected_to_hotspot
 
-    def connect_wifi(self, ssid: str) -> bool:
-        self.update_task_status(f"Connecting to {self.hotspot_ssid}")
-        networksetup("-setairportnetwork", "en0", ssid)
+    def connect_wifi(self):
+        networksetup("-setairportnetwork", "en0", self.hotspot_ssid)
+        sleep(2)
 
     def get_tx_rate(self) -> int:
         result = airport("-I")
@@ -119,20 +120,19 @@ class Hotspot:
         # Keep trying to connect until host is reached
         zero_if_connected = 1
         while zero_if_connected > 0:
-            self.update_task_status(f"Connecting to {host}, attempt {zero_if_connected}")
             self.kill_cna()  # Stop Apple's Captive Network Assistant from interrupting
             try:
                 zero_if_connected += 1
                 request = requests.get(host)
                 if request.status_code == 200:  # Connection successful
                     zero_if_connected = 0
-                    self.update_task_status(f"Connected to {host}.")
                     return request
             except:
                 pass  # ignore exceptions and try again
             sleep(5)
 
     def try_prelogin(self):
+        self.update_task_status("Trying pre-login...")
         r = self.try_connect_to("http://192.168.182.1:3990/prelogin")
         soup = BeautifulSoup(r.content, "html.parser")
         title = soup.findAll("title")[0].text
@@ -147,13 +147,14 @@ class Hotspot:
     def try_login(self, actual_url):
         # append the access code to the provided login url then submit
         actual_url += '&passcode=robriv'
+        self.update_task_status("Trying passcode...")
         r = self.try_connect_to(actual_url)
         if 'Login failed : Sorry, but you are out of data!' in r.text:
             # get more data by spoofing the mac and re-connecting
             self.spoof_mac()
         else:
             # not previously logged in with this mac address, so log in
-            self.update_task_status(f"Logging in...")
+            self.update_task_status(f"Authenticating...")
             soup = BeautifulSoup(r.content, "html.parser")
             redirect_url = soup.findAll("meta")
             login_url = ""
