@@ -1,7 +1,7 @@
 # hotspot-autologin
 In brief: Spoof the device mac address and auto login to wifi hotspot until allowance runs out then repeat.
 
-![Running the app](https://im3.ezgif.com/tmp/ezgif-3-6ec22475b0.gif "Screen capture")
+[![Screen-Shot-2023-06-06-at-4-41-41-PM.png](https://i.postimg.cc/Gt6tGNxJ/Screen-Shot-2023-06-06-at-4-41-41-PM.png)](https://postimg.cc/T5qTXtSp)  
 
 I wrote this while staying at a holiday park that provided a free wifi hotspot but which was was limited to 600 MB per device per day.
 
